@@ -1,0 +1,41 @@
+# Build files
+*.o
+*.out
+*.exe
+build/
+bin/
+we_audit_sdk
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Private keys and secrets
+key/
+*.pem
+*_secret
+*_secret.*
+
+# Dependencies
+third_party/
+vendor/
+
+# Logs
+*.log
+logs/
+
+# Debug files
+core
+*.dSYM/
+
+# Project specific
+# C SDK of WeWork Finance, documentation at:
+# https://developer.work.weixin.qq.com/document/path/91774
+# Using SDK version 2025-2-13, download from:
+# https://jiexiang.oss-cn-wulanchabu.aliyuncs.com/misc/%E6%83%A0%E5%B7%A5%E4%BA%91/sdk_x86_v3_20250205.tgz
+C_sdk/
+libWeWorkFinanceSdk_C.so
+sdk_x86_v3_20250205.tgz
