@@ -24,7 +24,10 @@ class WeComAudit:
         result = lib.get_new_messages(self.decryptor, seq)
         if result:
             json_str = result.decode()
-            return json.loads(json_str)
+            data = json.loads(json_str)
+            if data.get("errcode", 0) != 0:
+                raise RuntimeError(f"Failed to get messages: {data.get('errmsg', 'Unknown error')}")
+            return data
         return None
 
     def __del__(self):
@@ -34,5 +37,5 @@ class WeComAudit:
 # 使用示例
 if __name__ == "__main__":
     audit = WeComAudit("config.json")
-    messages = audit.get_new_messages(114097)
-    print(json.dumps(messages, indent=10))
+    messages = audit.get_new_messages(0)
+    print(json.dumps(messages, indent=2))

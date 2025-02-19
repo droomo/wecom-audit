@@ -108,7 +108,7 @@ private:
 
 		json decrypted_json = json::parse(GetContentFromSlice(decrypted_msg));
 		json complete_msg = original_fields;
-		complete_msg["decrypted_content"] = decrypted_json;
+		complete_msg["content"] = decrypted_json;
 
 		FreeSlice(decrypted_msg);
 		return complete_msg;
@@ -207,8 +207,22 @@ public:
 		while (has_more) {
 			json batch = get_chat_data(current_seq, LIMIT, timeout);
 			
-			// Check if retrieval was successful
-			if (batch.empty() || !batch.contains("messages") || batch["messages"].empty()) {
+			// 如果企业微信API返回了错误
+			if (batch.contains("errcode") && batch["errcode"] != 0) {
+				result["errcode"] = batch["errcode"];
+				result["errmsg"] = batch.value("errmsg", "Unknown error");
+				return result;
+			}
+
+			// 检查是否有错误发生
+			if (batch.empty()) {
+				result["errcode"] = -1;
+				result["errmsg"] = "Failed to get chat data";
+				return result;
+			}
+			
+			// 检查消息数组是否存在且非空
+			if (!batch.contains("messages") || batch["messages"].empty()) {
 				has_more = false;
 				continue;
 			}
