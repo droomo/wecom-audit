@@ -30,7 +30,7 @@ private:
 			return "";
 		}
 
-		// Base64 decode first
+		// Perform base64 decode
 		BIO* b64 = BIO_new(BIO_f_base64());
 		BIO* bmem = BIO_new_mem_buf(encrypted_data.c_str(), encrypted_data.length());
 		bmem = BIO_push(b64, bmem);
@@ -47,7 +47,7 @@ private:
 			return "";
 		}
 
-		// RSA decrypt
+		// Perform RSA decryption
 		std::vector<unsigned char> decrypted_buf(RSA_size(rsa));
 		int result = RSA_private_decrypt(decoded_size, buffer.data(), 
 									   decrypted_buf.data(), rsa, RSA_PKCS1_PADDING);
@@ -69,20 +69,18 @@ private:
 		string encrypt_random_key = msg["encrypt_random_key"];
 		string encrypt_chat_msg = msg["encrypt_chat_msg"];
 		
-		// 保存原始字段
+		// Preserve original fields
 		json original_fields = {
 			{"seq", msg["seq"]},
 			{"msgid", msg["msgid"]}
 		};
 		
-		// Decrypt random key
 		string decrypted_key = rsa_decrypt(encrypt_random_key);
 		if (decrypted_key.empty()) {
 			printf("Failed to decrypt random key\n");
 			return json();
 		}
 
-		// Decrypt message
 		Slice_t* decrypted_msg = NewSlice();
 		int ret = DecryptData(decrypted_key.c_str(), encrypt_chat_msg.c_str(), decrypted_msg);
 		if (ret != 0) {
@@ -109,7 +107,7 @@ public:
 	}
 
 	bool init(const string& pri_key_path, const string& app_secret_path) {
-		// Read private key
+		// Load private key
 		FILE* fp = fopen(pri_key_path.c_str(), "r");
 		if (!fp) {
 			printf("Can not open private key file %s\n", pri_key_path.c_str());
@@ -126,7 +124,7 @@ public:
 		fclose(fp);
 		private_key = pri_key_buf;
 
-		// Read app secret
+		// Load app secret
 		fp = fopen(app_secret_path.c_str(), "r");
 		if (!fp) {
 			printf("Can not open app secret file %s\n", app_secret_path.c_str());
@@ -144,9 +142,9 @@ public:
 		app_secret = app_secret_buf;
 		free(app_secret_buf);
 
-		app_id = "ww9c08cefb660a4a8c";  // 可以改为从配置文件读取
+		// TODO: Load from config file
+		app_id = "ww9c08cefb660a4a8c";
 
-		// Initialize SDK
 		sdk = NewSdk();
 		int ret = Init(sdk, app_id.c_str(), app_secret.c_str());
 		if (ret != 0) {
@@ -186,6 +184,40 @@ public:
 		FreeSlice(chat_data);
 		return result;
 	}
+
+	// Retrieve all messages starting from the specified seq
+	json get_all_chat_data(unsigned long long start_seq = 0, unsigned long long timeout = 60) {
+		json result;
+		result["errcode"] = 0;
+		result["messages"] = json::array();
+		
+		unsigned long long current_seq = start_seq;
+		const unsigned int LIMIT = 100;  // Maximum messages per request
+		bool has_more = true;
+		
+		while (has_more) {
+			json batch = get_chat_data(current_seq, LIMIT, timeout);
+			
+			// Check if retrieval was successful
+			if (batch.empty() || !batch.contains("messages") || batch["messages"].empty()) {
+				has_more = false;
+				continue;
+			}
+			
+			for (const auto& msg : batch["messages"]) {
+				result["messages"].push_back(msg);
+				current_seq = msg["seq"].get<unsigned long long>();
+			}
+			
+			has_more = (batch["messages"].size() == LIMIT);
+			
+			printf("Retrieved %zu messages, current seq: %llu\n", 
+				   result["messages"].size(), current_seq);
+		}
+		
+		printf("Total messages retrieved: %zu\n", result["messages"].size());
+		return result;
+	}
 };
 
 int main(int argc, char *argv[]) {
@@ -195,8 +227,9 @@ int main(int argc, char *argv[]) {
 		return -1;
 	}
 
-	json result = decryptor.get_chat_data();
-	printf("Decrypted messages:\n%s\n", result.dump(2).c_str());
+	// Retrieve all messages starting from the specified seq
+	json result = decryptor.get_all_chat_data(0);
+	printf("All decrypted messages:\n%s\n", result.dump(2).c_str());
 
 	return 0;
 }
