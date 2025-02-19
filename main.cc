@@ -8,6 +8,7 @@
 #include <openssl/bio.h>
 #include <nlohmann/json.hpp>
 #include <vector>
+#include <fstream>
 
 using std::string;
 using json = nlohmann::json;
@@ -16,8 +17,23 @@ class WeWorkFinanceDecryptor {
 private:
 	WeWorkFinanceSdk_t* sdk;
 	const char* private_key;
-	string app_id;
-	string app_secret;
+	json config;
+
+	void load_config(const string& config_path) {
+		std::ifstream config_file(config_path);
+		if (!config_file.is_open()) {
+			throw std::runtime_error("Cannot open config file: " + config_path);
+		}
+		config = json::parse(config_file);
+		
+		// Validate required fields
+		if (!config.contains("app_id") || 
+			!config.contains("app_secret") || 
+			!config.contains("batch_size") ||
+			!config.contains("private_key_path")) {
+			throw std::runtime_error("Missing required fields in config file");
+		}
+	}
 
 	string rsa_decrypt(const string& encrypted_data) {
 		string decrypted;
@@ -104,13 +120,24 @@ public:
 		if (sdk) {
 			DestroySdk(sdk);
 		}
+		if (private_key) {
+			free((void*)private_key);
+		}
 	}
 
-	bool init(const string& pri_key_path, const string& app_secret_path) {
+	bool init(const string& config_path) {
+		try {
+			load_config(config_path);
+		} catch (const std::exception& e) {
+			printf("Failed to load config: %s\n", e.what());
+			return false;
+		}
+
 		// Load private key
-		FILE* fp = fopen(pri_key_path.c_str(), "r");
+		FILE* fp = fopen(config["private_key_path"].get<string>().c_str(), "r");
 		if (!fp) {
-			printf("Can not open private key file %s\n", pri_key_path.c_str());
+			printf("Can not open private key file %s\n", 
+				   config["private_key_path"].get<string>().c_str());
 			return false;
 		}
 
@@ -124,29 +151,10 @@ public:
 		fclose(fp);
 		private_key = pri_key_buf;
 
-		// Load app secret
-		fp = fopen(app_secret_path.c_str(), "r");
-		if (!fp) {
-			printf("Can not open app secret file %s\n", app_secret_path.c_str());
-			return false;
-		}
-
-		fseek(fp, 0, SEEK_END);
-		file_size = ftell(fp);
-		fseek(fp, 0, SEEK_SET);
-
-		char* app_secret_buf = (char*)malloc(file_size + 1);
-		read_size = fread(app_secret_buf, 1, file_size, fp);
-		app_secret_buf[read_size] = '\0';
-		fclose(fp);
-		app_secret = app_secret_buf;
-		free(app_secret_buf);
-
-		// TODO: Load from config file
-		app_id = "ww9c08cefb660a4a8c";
-
 		sdk = NewSdk();
-		int ret = Init(sdk, app_id.c_str(), app_secret.c_str());
+		int ret = Init(sdk, 
+					  config["app_id"].get<string>().c_str(), 
+					  config["app_secret"].get<string>().c_str());
 		if (ret != 0) {
 			printf("Init sdk failed, ret: %d\n", ret);
 			return false;
@@ -155,9 +163,9 @@ public:
 		return true;
 	}
 
-	json get_chat_data(unsigned long long seq = 0, 
-					  unsigned long long limit = 1000,
-					  unsigned long long timeout = 60) {
+	json get_chat_data(unsigned long long seq, 
+					  unsigned long long limit,
+					  unsigned long long timeout) {
 		json result;
 		Slice_t* chat_data = NewSlice();
 
@@ -192,7 +200,7 @@ public:
 		result["messages"] = json::array();
 		
 		unsigned long long current_seq = start_seq;
-		const unsigned int LIMIT = 100;  // Maximum messages per request
+		const unsigned int LIMIT = config["batch_size"].get<unsigned int>();
 		bool has_more = true;
 		
 		while (has_more) {
@@ -223,7 +231,7 @@ public:
 int main(int argc, char *argv[]) {
 	WeWorkFinanceDecryptor decryptor;
 	
-	if (!decryptor.init("key/private.pem", "key/app_secret")) {
+	if (!decryptor.init("config.json")) {
 		return -1;
 	}
 

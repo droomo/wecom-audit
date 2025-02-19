@@ -1,0 +1,6 @@
+{
+    "app_id": "your_app_id_here",
+    "app_secret": "your_app_secret_here",
+    "batch_size": 100,
+    "private_key_path": "key/private.pem"
+} 

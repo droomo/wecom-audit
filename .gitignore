@@ -18,6 +18,7 @@ key/
 *.pem
 *_secret
 *_secret.*
+config.json
 
 # Dependencies
 third_party/
