@@ -40,3 +40,10 @@ core
 C_sdk/
 libWeWorkFinanceSdk_C.so
 sdk_x86_v3_20250205.tgz
+
+# Python
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
