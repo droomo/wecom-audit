@@ -1,3 +1,4 @@
+#include "wecom_audit.h"
 #include "WeWorkFinanceSdk_C.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -228,16 +229,37 @@ public:
 	}
 };
 
-int main(int argc, char *argv[]) {
-	WeWorkFinanceDecryptor decryptor;
-	
-	if (!decryptor.init("config.json")) {
-		return -1;
+// 实现导出函数
+extern "C" {
+	void* create_decryptor() {
+		return new WeWorkFinanceDecryptor();
 	}
 
-	// Retrieve all messages starting from the specified seq
-	json result = decryptor.get_all_chat_data(0);
-	printf("All decrypted messages:\n%s\n", result.dump(2).c_str());
+	bool init_decryptor(void* decryptor, const char* config_path) {
+		if (!decryptor) return false;
+		return static_cast<WeWorkFinanceDecryptor*>(decryptor)->init(config_path);
+	}
 
-	return 0;
+	const char* get_new_messages(void* decryptor, unsigned long long seq) {
+		if (!decryptor) return nullptr;
+		
+		WeWorkFinanceDecryptor* dec = static_cast<WeWorkFinanceDecryptor*>(decryptor);
+		json result = dec->get_all_chat_data(seq);
+		
+		// 将结果转换为字符串并复制到堆内存
+		string* str = new string(result.dump());
+		return str->c_str();
+	}
+
+	void destroy_decryptor(void* decryptor) {
+		if (decryptor) {
+			delete static_cast<WeWorkFinanceDecryptor*>(decryptor);
+		}
+	}
+
+	void free_string(char* str) {
+		if (str) {
+			delete[] str;
+		}
+	}
 }
