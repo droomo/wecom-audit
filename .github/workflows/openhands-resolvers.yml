@@ -27,4 +27,6 @@ jobs:
       LLM_MODEL: 'openai/gpt-4o'
       target_branch: ${{ vars.TARGET_BRANCH || 'main' }}
     secrets:
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      PAT_USERNAME: ${{ secrets.PAT_USERNAME }}
       LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
