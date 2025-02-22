@@ -28,7 +28,7 @@ private:
 		config = json::parse(config_file);
 		
 		// Validate required fields
-		if (!config.contains("app_id") || 
+		if (!config.contains("corporation_id") || 
 			!config.contains("app_secret") || 
 			!config.contains("batch_size") ||
 			!config.contains("private_key_path")) {
@@ -154,7 +154,7 @@ public:
 
 		sdk = NewSdk();
 		int ret = Init(sdk, 
-					  config["app_id"].get<string>().c_str(), 
+					  config["corporation_id"].get<string>().c_str(), 
 					  config["app_secret"].get<string>().c_str());
 		if (ret != 0) {
 			printf("Init sdk failed, ret: %d\n", ret);

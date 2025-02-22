@@ -34,8 +34,10 @@ class WeComAudit:
         if hasattr(self, 'decryptor'):
             lib.destroy_decryptor(self.decryptor)
 
-# 使用示例
 if __name__ == "__main__":
     audit = WeComAudit("config.json")
-    messages = audit.get_new_messages(0)
+    messages = audit.get_new_messages(7)
     print(json.dumps(messages, indent=2))
+
+    with open("messages.json", "w") as f:
+        json.dump(messages, f, indent=2, ensure_ascii=False)

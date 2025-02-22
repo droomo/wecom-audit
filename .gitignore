@@ -19,6 +19,7 @@ key/
 *_secret
 *_secret.*
 config.json
+config.puyuan.json
 
 # Dependencies
 third_party/
