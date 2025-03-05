@@ -48,3 +48,15 @@ sdk_x86_v3_20250205.tgz
 *.pyd
 *.pyw
 *.pyz
+__pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+.env
+.venv
+venv/
+ENV/
