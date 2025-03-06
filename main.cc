@@ -277,3 +277,65 @@ extern "C" {
 		}
 	}
 }
+
+// 在文件末尾添加 main 函数
+int main(int argc, char* argv[]) {
+	if (argc != 2) {
+		printf("Usage: %s <config_path>\n", argv[0]);
+		return 1;
+	}
+
+	WeWorkFinanceDecryptor decryptor;
+	if (!decryptor.init(argv[1])) {
+		printf("Failed to initialize decryptor\n");
+		return 1;
+	}
+
+	json messages = decryptor.get_all_chat_data();
+	if (messages.contains("errcode") && messages["errcode"] != 0) {
+		printf("Failed to get messages: %s\n", messages.value("errmsg", "Unknown error").c_str());
+		return 1;
+	}
+
+	// 处理消息数据
+	for (auto& msg : messages["messages"]) {
+		if (msg.contains("content") && msg["content"].contains("tolist")) {
+			msg["content"].erase("tolist");
+		}
+		if (msg.contains("content") && msg["content"].contains("msgtime")) {
+			time_t msgtime = msg["content"]["msgtime"].get<time_t>() / 1000;
+			char time_str[26];
+			ctime_r(&msgtime, time_str);
+			time_str[24] = '\0';  // 移除换行符
+			msg["content"]["time"] = time_str;
+		}
+	}
+
+	// 按发送者聚合消息
+	json sender_messages;
+	for (const auto& msg : messages["messages"]) {
+		std::string sender = msg["content"]["from"];
+		if (!sender_messages.contains(sender)) {
+			sender_messages[sender] = json::array();
+		}
+		sender_messages[sender].push_back(msg);
+	}
+
+	// 保存结果
+	std::ofstream out_file("messages.json");
+	out_file << messages.dump(2);
+	out_file.close();
+
+	// 创建数据目录
+	system("mkdir -p data/by_sender");
+
+	// 保存按发送者聚合的数据
+	for (const auto& [sender, msgs] : sender_messages.items()) {
+		std::ofstream sender_file("data/by_sender/" + sender + ".json");
+		sender_file << msgs.dump(2);
+		sender_file.close();
+	}
+
+	printf("Successfully processed %zu messages\n", messages["messages"].size());
+	return 0;
+}
