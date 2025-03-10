@@ -237,9 +237,81 @@ public:
 			printf("Retrieved %zu messages, current seq: %llu\n", 
 				   result["messages"].size(), current_seq);
 		}
-		
+
 		printf("Total messages retrieved: %zu\n", result["messages"].size());
 		return result;
+	}
+
+	static bool download_file(WeWorkFinanceDecryptor* decryptor, const json& file_info, const string& save_path) {
+		string sdkfileid = file_info["sdkfileid"];
+		string filename = file_info["filename"];
+
+		// Get media data
+		MediaData_t* media_data = NewMediaData();
+		string index;
+		int is_finish = 0;
+
+		try {
+			while (is_finish == 0) {
+				// Get next chunk of file
+				int ret = GetMediaData(decryptor->sdk,
+									 index.c_str(),
+									 sdkfileid.c_str(),
+									 "", // proxy_host
+									 "", // proxy_password
+									 60, // timeout
+									 media_data);
+
+				if (ret != 0) {
+					printf("Failed to get media data, ret: %d\n", ret);
+					FreeMediaData(media_data);
+					return false;
+				}
+
+				// Open file in append mode
+				FILE* fp = fopen(save_path.c_str(), "ab+");
+				if (fp == nullptr) {
+					printf("Failed to open file: %s\n", save_path.c_str());
+					FreeMediaData(media_data);
+					return false;
+				}
+
+				// Write chunk to file
+				fwrite(media_data->data, 1, media_data->data_len, fp);
+				fclose(fp);
+
+				// Update index for next chunk
+				index = media_data->outindexbuf;
+				is_finish = media_data->is_finish;
+
+				printf("Downloaded chunk: is_finish: %d\n", is_finish);
+			}
+			printf("length: %d bytes", media_data->data_len);
+			FreeMediaData(media_data);
+			return true;
+
+		} catch (const std::exception& e) {
+			printf("Error downloading file: %s\n", e.what());
+			FreeMediaData(media_data);
+			return false;
+		}
+	}
+
+	bool download_message_file(const json& msg, const string& save_dir) {
+		if (!msg.contains("content") ||
+			!msg["content"].contains("file")) {
+			return false;
+			}
+
+		const json& file = msg["content"]["file"];
+		string filename = file["filename"];
+		string save_path = save_dir + "/" + filename;
+
+		// Create directory if it doesn't exist
+		string mkdir_cmd = "mkdir -p '" + save_dir + "'";
+		system(mkdir_cmd.c_str());
+
+		return download_file(this, file, save_path);
 	}
 };
 
@@ -276,6 +348,13 @@ extern "C" {
 			delete[] str;
 		}
 	}
+
+	bool download_files(void* decryptor, const char* file_info, const char* save_dir) {
+		if (!decryptor) return false;
+		WeWorkFinanceDecryptor* dec = static_cast<WeWorkFinanceDecryptor *>(decryptor);
+		json file = json::parse(file_info);
+		return dec->download_message_file(file, save_dir);
+	}
 }
 
 // 在文件末尾添加 main 函数
@@ -297,17 +376,19 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 
-	// 处理消息数据
+	system("mkdir -p data/files");
+	// 处理文件数据
 	for (auto& msg : messages["messages"]) {
-		if (msg.contains("content") && msg["content"].contains("tolist")) {
-			msg["content"].erase("tolist");
-		}
-		if (msg.contains("content") && msg["content"].contains("msgtime")) {
-			time_t msgtime = msg["content"]["msgtime"].get<time_t>() / 1000;
-			char time_str[26];
-			ctime_r(&msgtime, time_str);
-			time_str[24] = '\0';  // 移除换行符
-			msg["content"]["time"] = time_str;
+		if (msg.contains("content") && msg["content"].contains("file")) {
+			printf("%s\n",msg["content"]["file"]["filename"].get<string>().c_str());
+			string save_dir = "data/files";
+			if (decryptor.download_message_file(msg, save_dir)) {
+				printf("Successfully downloaded: %s\n",
+					   msg["content"]["file"]["filename"].get<string>().c_str());
+			} else {
+				printf("Failed to download: %s\n",
+					   msg["content"]["file"]["filename"].get<string>().c_str());
+			}
 		}
 	}
 
