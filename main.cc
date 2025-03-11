@@ -237,9 +237,81 @@ public:
 			printf("Retrieved %zu messages, current seq: %llu\n", 
 				   result["messages"].size(), current_seq);
 		}
-		
+
 		printf("Total messages retrieved: %zu\n", result["messages"].size());
 		return result;
+	}
+
+	static bool download_file(WeWorkFinanceDecryptor* decryptor, const json& file_info, const string& save_path) {
+		string sdkfileid = file_info["sdkfileid"];
+		string filename = file_info["filename"];
+
+		// Get media data
+		MediaData_t* media_data = NewMediaData();
+		string index;
+		int is_finish = 0;
+
+		try {
+			while (is_finish == 0) {
+				// Get next chunk of file
+				int ret = GetMediaData(decryptor->sdk,
+									 index.c_str(),
+									 sdkfileid.c_str(),
+									 "", // proxy_host
+									 "", // proxy_password
+									 60, // timeout
+									 media_data);
+
+				if (ret != 0) {
+					printf("Failed to get media data, ret: %d\n", ret);
+					FreeMediaData(media_data);
+					return false;
+				}
+
+				// Open file in append mode
+				FILE* fp = fopen(save_path.c_str(), "ab+");
+				if (fp == nullptr) {
+					printf("Failed to open file: %s\n", save_path.c_str());
+					FreeMediaData(media_data);
+					return false;
+				}
+
+				// Write chunk to file
+				fwrite(media_data->data, 1, media_data->data_len, fp);
+				fclose(fp);
+
+				// Update index for next chunk
+				index = media_data->outindexbuf;
+				is_finish = media_data->is_finish;
+
+				printf("Downloaded chunk: is_finish: %d\n", is_finish);
+			}
+			printf("length: %d bytes", media_data->data_len);
+			FreeMediaData(media_data);
+			return true;
+
+		} catch (const std::exception& e) {
+			printf("Error downloading file: %s\n", e.what());
+			FreeMediaData(media_data);
+			return false;
+		}
+	}
+
+	bool download_message_file(const json& msg, const string& save_dir) {
+		if (!msg.contains("content") ||
+			!msg["content"].contains("file")) {
+			return false;
+			}
+
+		const json& file = msg["content"]["file"];
+		string filename = file["filename"];
+		string save_path = save_dir + "/" + filename;
+
+		// Create directory if it doesn't exist
+		string mkdir_cmd = "mkdir -p '" + save_dir + "'";
+		system(mkdir_cmd.c_str());
+
+		return download_file(this, file, save_path);
 	}
 };
 
@@ -276,4 +348,75 @@ extern "C" {
 			delete[] str;
 		}
 	}
+
+	bool download_file(void* decryptor, const char* file_info, const char* save_dir) {
+		if (!decryptor) return false;
+		WeWorkFinanceDecryptor* dec = static_cast<WeWorkFinanceDecryptor *>(decryptor);
+		json file = json::parse(file_info);
+		return dec->download_message_file(file, save_dir);
+	}
+}
+
+// 在文件末尾添加 main 函数
+int main(int argc, char* argv[]) {
+	if (argc != 2) {
+		printf("Usage: %s <config_path>\n", argv[0]);
+		return 1;
+	}
+
+	WeWorkFinanceDecryptor decryptor;
+	if (!decryptor.init(argv[1])) {
+		printf("Failed to initialize decryptor\n");
+		return 1;
+	}
+
+	json messages = decryptor.get_all_chat_data();
+	if (messages.contains("errcode") && messages["errcode"] != 0) {
+		printf("Failed to get messages: %s\n", messages.value("errmsg", "Unknown error").c_str());
+		return 1;
+	}
+
+	system("mkdir -p data/files");
+	// 处理文件数据
+	for (auto& msg : messages["messages"]) {
+		if (msg.contains("content") && msg["content"].contains("file")) {
+			printf("%s\n",msg["content"]["file"]["filename"].get<string>().c_str());
+			string save_dir = "data/files";
+			if (decryptor.download_message_file(msg, save_dir)) {
+				printf("Successfully downloaded: %s\n",
+					   msg["content"]["file"]["filename"].get<string>().c_str());
+			} else {
+				printf("Failed to download: %s\n",
+					   msg["content"]["file"]["filename"].get<string>().c_str());
+			}
+		}
+	}
+
+	// 按发送者聚合消息
+	json sender_messages;
+	for (const auto& msg : messages["messages"]) {
+		std::string sender = msg["content"]["from"];
+		if (!sender_messages.contains(sender)) {
+			sender_messages[sender] = json::array();
+		}
+		sender_messages[sender].push_back(msg);
+	}
+
+	// 保存结果
+	std::ofstream out_file("messages.json");
+	out_file << messages.dump(2);
+	out_file.close();
+
+	// 创建数据目录
+	system("mkdir -p data/by_sender");
+
+	// 保存按发送者聚合的数据
+	for (const auto& [sender, msgs] : sender_messages.items()) {
+		std::ofstream sender_file("data/by_sender/" + sender + ".json");
+		sender_file << msgs.dump(2);
+		sender_file.close();
+	}
+
+	printf("Successfully processed %zu messages\n", messages["messages"].size());
+	return 0;
 }
