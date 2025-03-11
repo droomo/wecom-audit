@@ -61,3 +61,7 @@ dist/
 .venv
 venv/
 ENV/
+
+data/
+
+dump_messages.py

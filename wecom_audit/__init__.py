@@ -20,7 +20,7 @@ lib.get_new_messages.restype = c_char_p
 lib.destroy_decryptor.argtypes = [c_void_p]
 lib.free_string.argtypes = [c_char_p]
 lib.download_file.argtypes = [c_void_p, c_char_p, c_char_p]
-lib.download_file.restypes = c_bool
+lib.download_file.restype = c_bool
 
 class WeComAudit:
     def __init__(self, config_path):
