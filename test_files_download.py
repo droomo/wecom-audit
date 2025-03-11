@@ -10,7 +10,7 @@ if __name__ == "__main__":
         if "content" in msg and "file" in msg["content"]:
             print(msg["content"]["file"]["filename"])
             save_dir = "data/files"
-            if audit.download_files(msg, save_dir):
+            if audit.download_file(msg, save_dir):
                 print(f"Successfully downloaded: {msg['content']['file']['filename']}")
             else:
                 print(f"Failed to download: {msg['content']['file']['filename']}")

@@ -349,7 +349,7 @@ extern "C" {
 		}
 	}
 
-	bool download_files(void* decryptor, const char* file_info, const char* save_dir) {
+	bool download_file(void* decryptor, const char* file_info, const char* save_dir) {
 		if (!decryptor) return false;
 		WeWorkFinanceDecryptor* dec = static_cast<WeWorkFinanceDecryptor *>(decryptor);
 		json file = json::parse(file_info);

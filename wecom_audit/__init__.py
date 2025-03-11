@@ -19,8 +19,8 @@ lib.get_new_messages.argtypes = [c_void_p, c_ulonglong]
 lib.get_new_messages.restype = c_char_p
 lib.destroy_decryptor.argtypes = [c_void_p]
 lib.free_string.argtypes = [c_char_p]
-lib.download_files.argtypes = [c_void_p, c_char_p, c_char_p]
-lib.download_files.restypes = c_bool
+lib.download_file.argtypes = [c_void_p, c_char_p, c_char_p]
+lib.download_file.restypes = c_bool
 
 class WeComAudit:
     def __init__(self, config_path):
@@ -57,9 +57,9 @@ class WeComAudit:
         if hasattr(self, 'decryptor'):
             lib.destroy_decryptor(self.decryptor)
 
-    def download_files(self, msg, save_dir):
+    def download_file(self, msg, save_dir):
         json_str = json.dumps(msg)
-        result = lib.download_files(self.decryptor, json_str.encode(), save_dir.encode())
+        result = lib.download_file(self.decryptor, json_str.encode(), save_dir.encode())
         return result
 
 if __name__ == "__main__":
