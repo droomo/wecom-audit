@@ -21,6 +21,11 @@ set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 # 更新 libWeWorkFinanceSdk_C.so 的路径
 link_directories(${CMAKE_SOURCE_DIR}/C_sdk)
 
+# 检查 C_sdk 目录是否存在
+if(NOT EXISTS "${CMAKE_SOURCE_DIR}/C_sdk/WeWorkFinanceSdk_C.h")
+    message(FATAL_ERROR "C_sdk directory is missing or incomplete. Please run setup.py to download the SDK.")
+endif()
+
 # 创建共享库
 add_library(wecom_audit SHARED main.cc)
 
