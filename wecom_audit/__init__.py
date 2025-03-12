@@ -2,32 +2,11 @@ import ctypes
 from ctypes import c_void_p, c_char_p, c_ulonglong, c_bool
 import json
 import os
-import sys
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 LIB_PATH = os.path.join(CURRENT_DIR, "libwecom_audit.so")
 
-# Add C_sdk directory to LD_LIBRARY_PATH
-C_SDK_DIR = os.path.join(CURRENT_DIR, "C_sdk")
-if os.path.exists(C_SDK_DIR):
-    # Set RPATH for the shared library
-    os.environ["LD_LIBRARY_PATH"] = C_SDK_DIR + ":" + os.environ.get("LD_LIBRARY_PATH", "")
-
-try:
-    lib = ctypes.CDLL(LIB_PATH)
-except OSError as e:
-    # Try to load with explicit dependency path
-    try:
-        sdk_lib_path = os.path.join(C_SDK_DIR, "libWeWorkFinanceSdk_C.so")
-        if os.path.exists(sdk_lib_path):
-            # Load the dependency first
-            ctypes.CDLL(sdk_lib_path)
-        # Now try loading our library again
-        lib = ctypes.CDLL(LIB_PATH)
-    except OSError as e2:
-        print(f"Failed to load library from {LIB_PATH}: {e2}")
-        print(f"Original error: {e}")
-        raise
+lib = ctypes.CDLL(LIB_PATH)
 
 lib.create_decryptor.restype = c_void_p
 lib.init_decryptor.argtypes = [c_void_p, c_char_p]

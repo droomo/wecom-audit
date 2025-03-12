@@ -1,5 +1,5 @@
 #include "wecom_audit.h"
-#include "WeWorkFinanceSdk_C.h"
+#include "C_sdk/WeWorkFinanceSdk_C.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
