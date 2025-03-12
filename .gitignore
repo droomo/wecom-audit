@@ -21,6 +21,9 @@ key/
 *_secret.*
 config.json
 config.puyuan.json
+.pypirc
+.env
+*.key
 
 # Dependencies
 third_party/

@@ -39,25 +39,36 @@ class CMakeBuild(build_ext):
             print("C_sdk directory not found or incomplete. Downloading SDK...")
             os.makedirs(c_sdk_dir, exist_ok=True)
             
-            # SDK URL - replace with the actual URL if different
-            sdk_url = "https://jiexiang.oss-cn-wulanchabu.aliyuncs.com/misc/%E6%83%A0%E5%B7%A5%E4%BA%91/sdk_x86_v3_20250205.tgz"
+            # Use local SDK file if available
+            local_sdk_path = os.path.join(os.path.abspath('.'), "sdk_x86_v3_20250205.tgz")
             
-            # Download and extract SDK
-            with tempfile.NamedTemporaryFile(suffix=".tgz", delete=False) as tmp_file:
-                print(f"Downloading SDK from {sdk_url}...")
-                urllib.request.urlretrieve(sdk_url, tmp_file.name)
+            if os.path.exists(local_sdk_path):
+                print(f"Using local SDK file: {local_sdk_path}")
+                sdk_file = local_sdk_path
+            else:
+                # SDK URL - replace with the actual URL if different
+                sdk_url = "https://jiexiang.oss-cn-wulanchabu.aliyuncs.com/misc/%E6%83%A0%E5%B7%A5%E4%BA%91/sdk_x86_v3_20250205.tgz"
                 
-                print(f"Extracting SDK to {c_sdk_dir}...")
-                with tarfile.open(tmp_file.name, "r:gz") as tar:
-                    # Extract only the necessary files
-                    for member in tar.getmembers():
-                        if member.name.endswith(("WeWorkFinanceSdk_C.h", "libWeWorkFinanceSdk_C.so")):
-                            member.name = os.path.basename(member.name)
-                            tar.extract(member, c_sdk_dir)
-                
-                os.unlink(tmp_file.name)
+                # Download SDK
+                with tempfile.NamedTemporaryFile(suffix=".tgz", delete=False) as tmp_file:
+                    print(f"Downloading SDK from {sdk_url}...")
+                    urllib.request.urlretrieve(sdk_url, tmp_file.name)
+                    sdk_file = tmp_file.name
             
-            print("SDK downloaded and extracted successfully.")
+            # Extract SDK
+            print(f"Extracting SDK to {c_sdk_dir}...")
+            with tarfile.open(sdk_file, "r:gz") as tar:
+                # Extract only the necessary files
+                for member in tar.getmembers():
+                    if member.name.endswith(("WeWorkFinanceSdk_C.h", "libWeWorkFinanceSdk_C.so")):
+                        member.name = os.path.basename(member.name)
+                        tar.extract(member, c_sdk_dir)
+            
+            # Clean up temporary file if we downloaded it
+            if sdk_file != local_sdk_path and os.path.exists(sdk_file):
+                os.unlink(sdk_file)
+                
+            print("SDK extracted successfully.")
 
     def build_extension(self, ext):
         extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
@@ -100,11 +111,25 @@ class CMakeBuild(build_ext):
             if os.path.exists(sdk_header):
                 shutil.copy2(sdk_header, os.path.join(target_sdk_dir, "WeWorkFinanceSdk_C.h"))
 
-# Custom install command to ensure C_sdk is included
-from setuptools.command.install import install
-class CustomInstall(install):
-    def run(self):
-        install.run(self)
+# Custom bdist_wheel command to ensure proper wheel building
+from wheel.bdist_wheel import bdist_wheel
+
+class BdistWheelCustom(bdist_wheel):
+    def finalize_options(self):
+        bdist_wheel.finalize_options(self)
+        # Mark the wheel as platform-specific (not pure Python)
+        self.root_is_pure = False
+        # Set the platform tag to manylinux2014 for compatibility with PyPI
+        self.plat_name_supplied = True
+        if self.plat_name.startswith('linux'):
+            self.plat_name = 'manylinux2014_x86_64'
+
+# read README.md as long description
+try:
+    with open("README.md", "r", encoding="utf-8") as fh:
+        long_description = fh.read()
+except FileNotFoundError:
+    long_description = "WeChat Work (WeCom) Audit API Python Wrapper"
 
 setup(
     name="wecom-audit",
@@ -114,7 +139,7 @@ setup(
     ext_modules=[CMakeExtension("wecom_audit.libwecom_audit")],
     cmdclass={
         "build_ext": CMakeBuild,
-        "install": CustomInstall,
+        "bdist_wheel": BdistWheelCustom,
     },
     package_data={
         "wecom_audit": ["*.so", "C_sdk/*.so", "C_sdk/*.h"],
@@ -122,4 +147,25 @@ setup(
     include_package_data=True,
     setup_requires=["setuptools>=42", "wheel"],
     install_requires=[],
+    author="droomo",
+    author_email="th@droomo.com",
+    description="Python wrapper for WeChat Work (WeCom) Audit API",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    keywords="wecom, wechat work, audit, 企业微信, 会话存档",
+    url="https://github.com/droomo/wecom-audit",
+    project_urls={
+        "Bug Tracker": "https://github.com/droomo/wecom-audit/issues",
+        "Source Code": "https://github.com/droomo/wecom-audit",
+    },
+    classifiers=[
+        "Development Status :: 4 - Beta",
+        "Intended Audience :: Developers",
+        "License :: OSI Approved :: MIT License",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.11",
+        "Operating System :: POSIX :: Linux",
+        "Topic :: Software Development :: Libraries :: Python Modules",
+    ],
+    zip_safe=False,
 )
