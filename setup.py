@@ -133,7 +133,7 @@ except FileNotFoundError:
 
 setup(
     name="wecom-audit",
-    version="0.1.1",
+    version="0.1.2",
     packages=find_packages(include=["wecom_audit", "wecom_audit.*"]),
     python_requires=">=3.11",
     ext_modules=[CMakeExtension("wecom_audit.libwecom_audit")],
@@ -147,12 +147,12 @@ setup(
     include_package_data=True,
     setup_requires=["setuptools>=42", "wheel"],
     install_requires=[],
-    author="droomo",
+    author="droomo, Grainstone",
     author_email="th@droomo.com",
-    description="Python wrapper for WeChat Work (WeCom) Audit API",
+    description="Python wrapper for WeChat Work (WeCom) Audit API. © 2025 puyuan.tech, Ltd. All rights reserved.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    keywords="wecom, wechat work, audit, 企业微信, 会话存档",
+    keywords="wecom, wechat work, audit, 企业微信, 企微, 消息获取, 会话存档, puyuan.tech",
     url="https://github.com/droomo/wecom-audit",
     project_urls={
         "Bug Tracker": "https://github.com/droomo/wecom-audit/issues",

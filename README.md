@@ -15,27 +15,15 @@ pip install wecom-audit
 - 提供简单易用的Python API
 - 基于企业微信官方C语言SDK封装
 
-## 使用示例
-
-```python
-from wecom_audit import WeComAudit
-
-client = WeComAudit("config.json")
-
-# 获取会话记录
-messages = client.get_chat_data(seq=0, limit=100)
-for msg in messages:
-    print(f"From: {msg.from_user}, Content: {msg.content}")
-
-# 下载媒体文件
-client.download_media("media_id", "output_file.jpg")
-```
-
 ## 依赖项
 
 - Python >= 3.11
 - CMake
 - OpenSSL开发库
+
+## 版权
+
+© 2025 puyuan.tech, Ltd. All rights reserved.
 
 ## 许可证
 

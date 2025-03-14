@@ -20,6 +20,21 @@ private:
 	const char* private_key;
 	json config;
 
+	void load_config_from_string(const string& config_json) {
+		try {
+			config = json::parse(config_json);
+		} catch (const std::exception& e) {
+			throw std::runtime_error("Failed to parse config JSON: " + string(e.what()));
+		}
+
+		if (!config.contains("corporation_id") || 
+			!config.contains("app_secret") || 
+			!config.contains("batch_size") ||
+			!config.contains("private_key_path")) {
+			throw std::runtime_error("Missing required fields in config");
+		}
+	}
+
 	void load_config(const string& config_path) {
 		std::ifstream config_file(config_path);
 		if (!config_file.is_open()) {
@@ -126,9 +141,9 @@ public:
 		}
 	}
 
-	bool init(const string& config_path) {
+	bool init(const string& config_json) {
 		try {
-			load_config(config_path);
+			load_config_from_string(config_json);
 		} catch (const std::exception& e) {
 			printf("Failed to load config: %s\n", e.what());
 			return false;
@@ -321,9 +336,9 @@ extern "C" {
 		return new WeWorkFinanceDecryptor();
 	}
 
-	bool init_decryptor(void* decryptor, const char* config_path) {
+	bool init_decryptor(void* decryptor, const char* config_json) {
 		if (!decryptor) return false;
-		return static_cast<WeWorkFinanceDecryptor*>(decryptor)->init(config_path);
+		return static_cast<WeWorkFinanceDecryptor*>(decryptor)->init(config_json);
 	}
 
 	const char* get_new_messages(void* decryptor, unsigned long long seq) {
@@ -364,8 +379,20 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 
+	// Read config file
+	std::ifstream config_file(argv[1]);
+	if (!config_file.is_open()) {
+		printf("Cannot open config file: %s\n", argv[1]);
+		return 1;
+	}
+	
+	string config_json = string(
+		std::istreambuf_iterator<char>(config_file),
+		std::istreambuf_iterator<char>()
+	);
+
 	WeWorkFinanceDecryptor decryptor;
-	if (!decryptor.init(argv[1])) {
+	if (!decryptor.init(config_json)) {
 		printf("Failed to initialize decryptor\n");
 		return 1;
 	}
