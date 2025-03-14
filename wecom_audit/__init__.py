@@ -22,7 +22,6 @@ class WeComAudit:
         config_path = Path(config_path_str)
         with config_path.open('r') as f:
             config = json.load(f)
-            config_json = json.dumps(config)
 
         private_key_path_str = config.get('private_key_path')
 
@@ -30,9 +29,14 @@ class WeComAudit:
         
         private_key_path = Path(private_key_path_str)
 
+        if not private_key_path.exists() and not private_key_path.is_absolute():
+            print(f"private_key_path {private_key_path} does not exist under current directory, using parent directory of config file [{config_path.parent}] instead")
+            private_key_path = config_path.parent / private_key_path
+
         assert private_key_path.exists(), f"private_key_path {private_key_path} does not exist"
 
-        config['private_key_path'] = private_key_path.absolute().as_posix()        
+        config['private_key_path'] = private_key_path.absolute().as_posix()
+        config_json = json.dumps(config)
         
         self.decryptor = lib.create_decryptor()
         if not lib.init_decryptor(self.decryptor, config_json.encode()):
