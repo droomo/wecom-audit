@@ -7,6 +7,13 @@ LIB_PATH = Path(__file__).parent / "libwecom_audit.so"
 
 lib = ctypes.CDLL(LIB_PATH.as_posix())
 
+
+class MediaData_Bytes(ctypes.Structure):
+    _fields_ = [
+        ("data", ctypes.POINTER(ctypes.c_char)),
+        ("size", ctypes.c_size_t)
+    ]
+
 lib.create_decryptor.restype = c_void_p
 lib.init_decryptor.argtypes = [c_void_p, c_char_p]
 lib.init_decryptor.restype = c_bool
@@ -14,8 +21,9 @@ lib.get_new_messages.argtypes = [c_void_p, c_ulonglong]
 lib.get_new_messages.restype = c_char_p
 lib.destroy_decryptor.argtypes = [c_void_p]
 lib.free_string.argtypes = [c_char_p]
-lib.download_file.argtypes = [c_void_p, c_char_p, c_char_p]
-lib.download_file.restype = c_bool
+lib.get_media_data.restype = ctypes.POINTER(MediaData_Bytes)
+lib.get_media_data.argtypes = [c_void_p, c_char_p]
+lib.free_media_data.argtypes = [ctypes.POINTER(MediaData_Bytes)]
 
 class WeComAudit:
     def __init__(self, config_path_str):
@@ -56,10 +64,22 @@ class WeComAudit:
         if hasattr(self, 'decryptor'):
             lib.destroy_decryptor(self.decryptor)
 
-    def download_file(self, msg, save_dir):
-        json_str = json.dumps(msg)
-        result = lib.download_file(self.decryptor, json_str.encode(), save_dir.encode())
-        return result
+    def get_media_data(self, sdkfileid):
+        sdkfileid_bytes = sdkfileid.encode('utf-8')
+        result_ptr = lib.get_media_data(self.decryptor, sdkfileid_bytes)
+
+        if not result_ptr:
+            raise RuntimeError("Failed to get media data")
+
+        try:
+            data = bytes(result_ptr.contents.data[:result_ptr.contents.size])
+            lib.free_media_data(result_ptr)
+            return data
+
+        except Exception as e:
+            if result_ptr:
+                lib.free_media_data(result_ptr)
+            raise RuntimeError(f"Error processing media data: {str(e)}")
 
 if __name__ == "__main__":
     audit = WeComAudit("config.json")
