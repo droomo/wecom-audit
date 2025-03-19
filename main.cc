@@ -10,6 +10,9 @@
 #include <nlohmann/json.hpp>
 #include <vector>
 #include <fstream>
+#include <chrono>
+#include <iomanip>
+#include <sstream>
 
 using std::string;
 using json = nlohmann::json;
@@ -254,50 +257,103 @@ public:
 		return result;
 	}
 
-	MediaData_Bytes* download_media_data(const string& sdkfileid) {
-		MediaData_t* media_data = NewMediaData();
-		string index;
-		int is_finish = 0;
-		std::vector<char> complete_data;
+    MediaData_Bytes *download_media_data(const string &sdkfileid) {
+        string index;
+        int is_finish = 0;
+        char *buffer = nullptr;
+        size_t buffer_capacity = 1024 * 1024;
+        size_t current_pos = 0;
 
-		try {
-			while (is_finish == 0) {
-				int ret = GetMediaData(this->sdk,
-									 index.c_str(),
-									 sdkfileid.c_str(),
-									 "", // proxy_host
-									 "", // proxy_password
-									 60, // timeout
-									 media_data);
+        int chunk_count = 0;
 
-				if (ret != 0) {
-					printf("Failed to get media data, ret: %d\n", ret);
-					FreeMediaData(media_data);
-					return nullptr;
-				}
+        auto get_timestamp = []() {
+            auto now = std::chrono::system_clock::now();
+            auto time = std::chrono::system_clock::to_time_t(now);
+            std::stringstream ss;
+            ss << std::put_time(std::localtime(&time), "%Y-%m-%d %H:%M:%S");
+            return ss.str();
+        };
 
-				complete_data.insert(complete_data.end(),
-								   media_data->data,
-								   media_data->data + media_data->data_len);
+        printf("[%s] Starting download of media file with sdkfileid: %s\n",
+               get_timestamp().c_str(), sdkfileid.c_str());
 
-				index = media_data->outindexbuf;
-				is_finish = media_data->is_finish;
-			}
+        MediaData_Bytes *result = new MediaData_Bytes;
+        result->data = nullptr;
+        result->size = 0;
 
-			MediaData_Bytes* result = new MediaData_Bytes;
-			result->data = new char[complete_data.size()];
-			result->size = complete_data.size();
-			memcpy(result->data, complete_data.data(), complete_data.size());
+        try {
+            buffer = new char[buffer_capacity];
 
-			FreeMediaData(media_data);
-			return result;
+            while (is_finish == 0) {
+                chunk_count++;
+                MediaData_t *media_data = NewMediaData();
 
-		} catch (const std::exception& e) {
-			printf("Error downloading media data: %s\n", e.what());
-			FreeMediaData(media_data);
-			return nullptr;
-		}
-	}
+                printf("[%s] Downloading chunk %d, current size: %.2f MB\n",
+                   get_timestamp().c_str(),
+                   chunk_count,
+                   current_pos / (1024.0 * 1024.0));
+
+                int ret = GetMediaData(
+                    this->sdk,
+                    index.c_str(),
+                    sdkfileid.c_str(),
+                    "", // proxy_host
+                    "", // proxy_password
+                    60, // timeout
+                    media_data
+				);
+
+                if (ret != 0) {
+                    printf("Failed to get media data, ret: %d\n", ret);
+                    FreeMediaData(media_data);
+                    delete[] buffer;
+                    delete result;
+                    return nullptr;
+                }
+
+                // Expanding buffer
+                if (current_pos + media_data->data_len > buffer_capacity) {
+                    size_t new_capacity = buffer_capacity * 2;
+                    while (new_capacity < current_pos + media_data->data_len) {
+                        new_capacity *= 2;
+                    }
+
+                    printf("[%s] Expanding buffer from %.2f MB to %.2f MB\n",
+                       get_timestamp().c_str(),
+                       buffer_capacity / (1024.0 * 1024.0),
+                       new_capacity / (1024.0 * 1024.0));
+
+                    char *new_buffer = new char[new_capacity];
+                    memcpy(new_buffer, buffer, current_pos);
+                    delete[] buffer;
+                    buffer = new_buffer;
+                    buffer_capacity = new_capacity;
+                }
+
+                memcpy(buffer + current_pos, media_data->data, media_data->data_len);
+                current_pos += media_data->data_len;
+
+                index = media_data->outindexbuf;
+                is_finish = media_data->is_finish;
+                FreeMediaData(media_data);
+            }
+
+            result->data = buffer;
+            result->size = current_pos;
+
+            printf("[%s] Download completed. Total size: %.2f MB, Chunks: %d\n",
+               get_timestamp().c_str(),
+               current_pos / (1024.0 * 1024.0),
+               chunk_count);
+
+            return result;
+        } catch (const std::exception &e) {
+            printf("Error downloading media data: %s\n", e.what());
+            delete[] buffer;
+            delete result;
+            return nullptr;
+        }
+    }
 };
 
 extern "C" {

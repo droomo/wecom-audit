@@ -1,17 +1,16 @@
 import json
 import ctypes
-from ctypes import c_void_p, c_char_p, c_ulonglong, c_bool
+from ctypes import c_void_p, c_char_p, c_ulonglong, c_bool, Structure, POINTER, c_char, c_size_t
 from pathlib import Path
 
 LIB_PATH = Path(__file__).parent / "libwecom_audit.so"
 
 lib = ctypes.CDLL(LIB_PATH.as_posix())
 
-
-class MediaData_Bytes(ctypes.Structure):
+class MediaData_Bytes(Structure):
     _fields_ = [
-        ("data", ctypes.POINTER(ctypes.c_char)),
-        ("size", ctypes.c_size_t)
+        ("data", POINTER(c_char)),  # Raw pointer to data
+        ("size", c_size_t)
     ]
 
 lib.create_decryptor.restype = c_void_p
