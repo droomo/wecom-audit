@@ -7,6 +7,8 @@ build/
 bin/
 we_audit_sdk
 
+cmake-build-debug/
+
 # IDE and editor files
 .vscode/
 .idea/

@@ -10,6 +10,9 @@
 #include <nlohmann/json.hpp>
 #include <vector>
 #include <fstream>
+#include <chrono>
+#include <iomanip>
+#include <sstream>
 
 using std::string;
 using json = nlohmann::json;
@@ -221,22 +224,19 @@ public:
 		
 		while (has_more) {
 			json batch = get_chat_data(current_seq, LIMIT, timeout);
-			
-			// 如果企业微信API返回了错误
+
 			if (batch.contains("errcode") && batch["errcode"] != 0) {
 				result["errcode"] = batch["errcode"];
 				result["errmsg"] = batch.value("errmsg", "Unknown error");
 				return result;
 			}
 
-			// 检查是否有错误发生
 			if (batch.empty()) {
 				result["errcode"] = -1;
 				result["errmsg"] = "Failed to get chat data";
 				return result;
 			}
-			
-			// 检查消息数组是否存在且非空
+
 			if (!batch.contains("messages") || batch["messages"].empty()) {
 				has_more = false;
 				continue;
@@ -257,80 +257,105 @@ public:
 		return result;
 	}
 
-	static bool download_file(WeWorkFinanceDecryptor* decryptor, const json& file_info, const string& save_path) {
-		string sdkfileid = file_info["sdkfileid"];
-		string filename = file_info["filename"];
+    MediaData_Bytes *download_media_data(const string &sdkfileid) {
+        string index;
+        int is_finish = 0;
+        char *buffer = nullptr;
+        size_t buffer_capacity = 1024 * 1024;
+        size_t current_pos = 0;
 
-		// Get media data
-		MediaData_t* media_data = NewMediaData();
-		string index;
-		int is_finish = 0;
+        int chunk_count = 0;
 
-		try {
-			while (is_finish == 0) {
-				// Get next chunk of file
-				int ret = GetMediaData(decryptor->sdk,
-									 index.c_str(),
-									 sdkfileid.c_str(),
-									 "", // proxy_host
-									 "", // proxy_password
-									 60, // timeout
-									 media_data);
+        auto get_timestamp = []() {
+            auto now = std::chrono::system_clock::now();
+            auto time = std::chrono::system_clock::to_time_t(now);
+            std::stringstream ss;
+            ss << std::put_time(std::localtime(&time), "%Y-%m-%d %H:%M:%S");
+            return ss.str();
+        };
 
-				if (ret != 0) {
-					printf("Failed to get media data, ret: %d\n", ret);
-					FreeMediaData(media_data);
-					return false;
-				}
+        printf("[%s] Starting download of media file with sdkfileid: %s\n",
+               get_timestamp().c_str(), sdkfileid.c_str());
 
-				// Open file in append mode
-				FILE* fp = fopen(save_path.c_str(), "ab+");
-				if (fp == nullptr) {
-					printf("Failed to open file: %s\n", save_path.c_str());
-					FreeMediaData(media_data);
-					return false;
-				}
+        MediaData_Bytes *result = new MediaData_Bytes;
+        result->data = nullptr;
+        result->size = 0;
 
-				// Write chunk to file
-				fwrite(media_data->data, 1, media_data->data_len, fp);
-				fclose(fp);
+        try {
+            buffer = new char[buffer_capacity];
 
-				// Update index for next chunk
-				index = media_data->outindexbuf;
-				is_finish = media_data->is_finish;
+            while (is_finish == 0) {
+                chunk_count++;
+                MediaData_t *media_data = NewMediaData();
 
-				printf("Downloaded chunk: is_finish: %d\n", is_finish);
-			}
-			printf("length: %d bytes", media_data->data_len);
-			FreeMediaData(media_data);
-			return true;
+                printf("[%s] Downloading chunk %d, current size: %.2f MB\n",
+                   get_timestamp().c_str(),
+                   chunk_count,
+                   current_pos / (1024.0 * 1024.0));
 
-		} catch (const std::exception& e) {
-			printf("Error downloading file: %s\n", e.what());
-			FreeMediaData(media_data);
-			return false;
-		}
-	}
+                int ret = GetMediaData(
+                    this->sdk,
+                    index.c_str(),
+                    sdkfileid.c_str(),
+                    "", // proxy_host
+                    "", // proxy_password
+                    60, // timeout
+                    media_data
+				);
 
-	bool download_message_file(const json& msg, const string& save_dir) {
-		if (!msg.contains("content") ||
-			!msg["content"].contains("file")) {
-			return false;
-			}
+                if (ret != 0) {
+                    printf("Failed to get media data, ret: %d\n", ret);
+                    FreeMediaData(media_data);
+                    delete[] buffer;
+                    delete result;
+                    return nullptr;
+                }
 
-		const json& file = msg["content"]["file"];
-		string filename = file["filename"];
-		string save_path = save_dir + "/" + filename;
+                // Expanding buffer
+                if (current_pos + media_data->data_len > buffer_capacity) {
+                    size_t new_capacity = buffer_capacity * 2;
+                    while (new_capacity < current_pos + media_data->data_len) {
+                        new_capacity *= 2;
+                    }
 
-		// Create directory if it doesn't exist
-		string mkdir_cmd = "mkdir -p '" + save_dir + "'";
-		system(mkdir_cmd.c_str());
+                    printf("[%s] Expanding buffer from %.2f MB to %.2f MB\n",
+                       get_timestamp().c_str(),
+                       buffer_capacity / (1024.0 * 1024.0),
+                       new_capacity / (1024.0 * 1024.0));
 
-		return download_file(this, file, save_path);
-	}
+                    char *new_buffer = new char[new_capacity];
+                    memcpy(new_buffer, buffer, current_pos);
+                    delete[] buffer;
+                    buffer = new_buffer;
+                    buffer_capacity = new_capacity;
+                }
+
+                memcpy(buffer + current_pos, media_data->data, media_data->data_len);
+                current_pos += media_data->data_len;
+
+                index = media_data->outindexbuf;
+                is_finish = media_data->is_finish;
+                FreeMediaData(media_data);
+            }
+
+            result->data = buffer;
+            result->size = current_pos;
+
+            printf("[%s] Download completed. Total size: %.2f MB, Chunks: %d\n",
+               get_timestamp().c_str(),
+               current_pos / (1024.0 * 1024.0),
+               chunk_count);
+
+            return result;
+        } catch (const std::exception &e) {
+            printf("Error downloading media data: %s\n", e.what());
+            delete[] buffer;
+            delete result;
+            return nullptr;
+        }
+    }
 };
 
-// 实现导出函数
 extern "C" {
 	void* create_decryptor() {
 		return new WeWorkFinanceDecryptor();
@@ -346,8 +371,7 @@ extern "C" {
 		
 		WeWorkFinanceDecryptor* dec = static_cast<WeWorkFinanceDecryptor*>(decryptor);
 		json result = dec->get_all_chat_data(seq);
-		
-		// 将结果转换为字符串并复制到堆内存
+
 		string* str = new string(result.dump());
 		return str->c_str();
 	}
@@ -364,22 +388,27 @@ extern "C" {
 		}
 	}
 
-	bool download_file(void* decryptor, const char* file_info, const char* save_dir) {
-		if (!decryptor) return false;
-		WeWorkFinanceDecryptor* dec = static_cast<WeWorkFinanceDecryptor *>(decryptor);
-		json file = json::parse(file_info);
-		return dec->download_message_file(file, save_dir);
+	MediaData_Bytes* get_media_data(void* decryptor, const char* sdkfileid) {
+		WeWorkFinanceDecryptor* dec = static_cast<WeWorkFinanceDecryptor*>(decryptor);
+		return dec->download_media_data(sdkfileid);
+	}
+
+	void free_media_data(MediaData_Bytes* data) {
+		if (data) {
+			if (data->data) {
+				delete[] data->data;
+			}
+			delete data;
+		}
 	}
 }
 
-// 在文件末尾添加 main 函数
 int main(int argc, char* argv[]) {
 	if (argc != 2) {
 		printf("Usage: %s <config_path>\n", argv[0]);
 		return 1;
 	}
 
-	// Read config file
 	std::ifstream config_file(argv[1]);
 	if (!config_file.is_open()) {
 		printf("Cannot open config file: %s\n", argv[1]);
@@ -403,23 +432,6 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 
-	system("mkdir -p data/files");
-	// 处理文件数据
-	for (auto& msg : messages["messages"]) {
-		if (msg.contains("content") && msg["content"].contains("file")) {
-			printf("%s\n",msg["content"]["file"]["filename"].get<string>().c_str());
-			string save_dir = "data/files";
-			if (decryptor.download_message_file(msg, save_dir)) {
-				printf("Successfully downloaded: %s\n",
-					   msg["content"]["file"]["filename"].get<string>().c_str());
-			} else {
-				printf("Failed to download: %s\n",
-					   msg["content"]["file"]["filename"].get<string>().c_str());
-			}
-		}
-	}
-
-	// 按发送者聚合消息
 	json sender_messages;
 	for (const auto& msg : messages["messages"]) {
 		std::string sender = msg["content"]["from"];
@@ -429,15 +441,12 @@ int main(int argc, char* argv[]) {
 		sender_messages[sender].push_back(msg);
 	}
 
-	// 保存结果
 	std::ofstream out_file("messages.json");
 	out_file << messages.dump(2);
 	out_file.close();
 
-	// 创建数据目录
 	system("mkdir -p data/by_sender");
 
-	// 保存按发送者聚合的数据
 	for (const auto& [sender, msgs] : sender_messages.items()) {
 		std::ofstream sender_file("data/by_sender/" + sender + ".json");
 		sender_file << msgs.dump(2);
