@@ -11,18 +11,23 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # 查找 OpenSSL
 find_package(OpenSSL REQUIRED)
 
+# 设置 C_sdk 路径
+set(SDK_DIR "${PROJECT_SOURCE_DIR}/C_sdk")
+
 # 添加头文件目录
-include_directories(${CMAKE_SOURCE_DIR}/C_sdk ${OPENSSL_INCLUDE_DIR})
+include_directories(${SDK_DIR} ${OPENSSL_INCLUDE_DIR})
 
 # 设置运行时动态库搜索路径
-set(CMAKE_INSTALL_RPATH "${CMAKE_SOURCE_DIR}/C_sdk")
+set(CMAKE_INSTALL_RPATH "$ORIGIN/C_sdk")
 set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+set(CMAKE_SKIP_BUILD_RPATH FALSE)
+set(CMAKE_SKIP_INSTALL_RPATH FALSE)
 
 # 更新 libWeWorkFinanceSdk_C.so 的路径
-link_directories(${CMAKE_SOURCE_DIR}/C_sdk)
+link_directories(${SDK_DIR})
 
 # 检查 C_sdk 目录是否存在
-if(NOT EXISTS "${CMAKE_SOURCE_DIR}/C_sdk/WeWorkFinanceSdk_C.h")
+if(NOT EXISTS "${SDK_DIR}/WeWorkFinanceSdk_C.h")
     message(FATAL_ERROR "C_sdk directory is missing or incomplete. Please run setup.py to download the SDK.")
 endif()
 
@@ -31,7 +36,7 @@ add_library(wecom_audit SHARED main.cc)
 
 # 链接依赖库
 target_link_libraries(wecom_audit 
-    -L${CMAKE_SOURCE_DIR}/C_sdk -lWeWorkFinanceSdk_C
+    -L${SDK_DIR} -lWeWorkFinanceSdk_C
     OpenSSL::SSL 
     OpenSSL::Crypto
 )
@@ -41,7 +46,7 @@ add_executable(wecom_audit_cli main.cc)
 
 # 链接可执行文件的依赖库
 target_link_libraries(wecom_audit_cli
-    -L${CMAKE_SOURCE_DIR}/C_sdk -lWeWorkFinanceSdk_C
+    -L${SDK_DIR} -lWeWorkFinanceSdk_C
     OpenSSL::SSL 
     OpenSSL::Crypto
 )
