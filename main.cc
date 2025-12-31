@@ -100,6 +100,28 @@ private:
 		return decrypted;
 	}
 
+	string sanitize_json_string(const string& input) {
+		string output;
+		output.reserve(input.size() * 2);  // Reserve more space for potential escape sequences
+		
+		for (size_t i = 0; i < input.size(); ++i) {
+			unsigned char c = input[i];
+
+			// Escape control characters (0x00-0x1F) except for allowed ones
+			if (c < 0x20 && c != '\n' && c != '\r' && c != '\t') {
+				// Escape as \uXXXX
+				char escaped[7];
+				snprintf(escaped, sizeof(escaped), "\\u%04x", c);
+				output += escaped;
+				printf("Escaped control character: 0x%02x -> %s\n", c, escaped);
+			} else {
+				output += c;
+			}
+		}
+		
+		return output;
+	}
+
 	json decrypt_single_message(const json& msg) {
 		string encrypt_random_key = msg["encrypt_random_key"];
 		string encrypt_chat_msg = msg["encrypt_chat_msg"];
@@ -123,8 +145,12 @@ private:
 			FreeSlice(decrypted_msg);
 			return json();
 		}
-
-		json decrypted_json = json::parse(GetContentFromSlice(decrypted_msg));
+		
+		string raw_content = GetContentFromSlice(decrypted_msg);
+		
+		// Sanitize the JSON string to remove invalid control characters
+		string sanitized_content = sanitize_json_string(raw_content);
+		json decrypted_json = json::parse(sanitized_content);
 		json complete_msg = original_fields;
 		complete_msg["content"] = decrypted_json;
 
