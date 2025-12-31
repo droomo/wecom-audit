@@ -14,7 +14,7 @@ echo -e "${BLUE}===== WeCom Audit Build & Publish Tool =====${NC}"
 build_wheel() {
     # Install necessary tools
     echo -e "${BLUE}Installing necessary tools...${NC}"
-    pip install --upgrade pip setuptools wheel twine
+    pip install --upgrade pip setuptools wheel twine -i https://pypi.tuna.tsinghua.edu.cn/simple
 
     # Clean previous builds
     echo -e "${BLUE}Cleaning previous builds...${NC}"

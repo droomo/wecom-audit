@@ -133,7 +133,7 @@ except FileNotFoundError:
 
 setup(
     name="wecom-audit",
-    version="0.1.4",
+    version="0.1.6",
     packages=find_packages(include=["wecom_audit", "wecom_audit.*"]),
     python_requires=">=3.11",
     ext_modules=[CMakeExtension("wecom_audit.libwecom_audit")],
